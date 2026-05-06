@@ -58,13 +58,22 @@ uv run paragon-clicker
 1. Paste a D2Core planner URL like `https://www.d2core.com/d4/planner?bd=1Tok`
 2. Click `Parse URL`
 3. Choose a variant
-4. Confirm `Target Process` is `Diablo IV.exe`
-5. Choose one board from the dropdown
-6. Click `Select Region`
-7. Drag from the board rectangle's top-left corner to the bottom-right corner while watching the live `21 x 21` overlay preview
-8. Click `Preview Grid Clicks` to show the on-screen `21 x 21` overlay and click points
-9. Set delay / interval
-10. Start clicking
+4. Enter your current available paragon points in `Current Points`
+5. Click `Apply Strategy`
+6. Confirm `Target Process` is `Diablo IV.exe`
+7. Choose one board from the dropdown
+8. Click `Select Region`
+9. Drag from the board rectangle's top-left corner to the bottom-right corner while watching the live `21 x 21` overlay preview
+10. Click `Preview Grid Clicks` to show the on-screen `21 x 21` overlay and click points
+11. Set delay / interval
+12. Start clicking
+
+## Progression Strategy
+
+- The app first spends the minimum required points to connect selected legendary nodes and glyph socket nodes
+- After that, any remaining points are allocated toward the remaining planned nodes by rarity priority
+- Higher-rarity nodes are preferred before lower-rarity nodes
+- Connector nodes on the path are still included when needed to reach a higher-priority target
 
 ## Region Selection Rule
 

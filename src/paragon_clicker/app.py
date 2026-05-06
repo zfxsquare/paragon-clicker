@@ -10,7 +10,11 @@ from typing import Any
 import psutil
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from paragon_clicker.d2core import GRID_SIZE, build_sequence_from_planner_input
+from paragon_clicker.d2core import (
+    GRID_SIZE,
+    apply_progression_strategy,
+    build_sequence_from_planner_input,
+)
 
 
 MOUSEEVENTF_LEFTDOWN = 0x0002
@@ -425,6 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.sequence_data: dict[str, Any] | None = None
         self.variant_data: dict[str, Any] | None = None
+        self.full_variant_data: dict[str, Any] | None = None
         self.board_sequences: list[BoardSequence] = []
         self.current_region: QtCore.QRect | None = None
         self.current_points: list[ClickPoint] = []
@@ -450,6 +455,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.parse_button = QtWidgets.QPushButton("Parse URL")
         self.variant_combo = QtWidgets.QComboBox()
         self.process_edit = QtWidgets.QLineEdit("Diablo IV.exe")
+        self.current_points_spin = QtWidgets.QSpinBox()
+        self.current_points_spin.setRange(0, 400)
+        self.current_points_spin.setValue(0)
+        self.apply_strategy_button = QtWidgets.QPushButton("Apply Strategy")
         source_layout.addWidget(QtWidgets.QLabel("Planner URL"), 0, 0)
         source_layout.addWidget(self.url_edit, 0, 1)
         source_layout.addWidget(self.parse_button, 0, 2)
@@ -457,6 +466,9 @@ class MainWindow(QtWidgets.QMainWindow):
         source_layout.addWidget(self.variant_combo, 1, 1, 1, 2)
         source_layout.addWidget(QtWidgets.QLabel("Target Process"), 2, 0)
         source_layout.addWidget(self.process_edit, 2, 1, 1, 2)
+        source_layout.addWidget(QtWidgets.QLabel("Current Points"), 3, 0)
+        source_layout.addWidget(self.current_points_spin, 3, 1)
+        source_layout.addWidget(self.apply_strategy_button, 3, 2)
         root.addWidget(source_group)
 
         options_group = QtWidgets.QGroupBox("Board Setup")
@@ -540,6 +552,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.parse_button.clicked.connect(self.on_parse_url)
         self.variant_combo.currentIndexChanged.connect(self.on_variant_changed)
+        self.apply_strategy_button.clicked.connect(self.on_apply_strategy)
         self.board_combo.currentIndexChanged.connect(self.on_board_changed)
         self.select_region_button.clicked.connect(self.on_select_region)
         self.preview_button.clicked.connect(self.on_preview_grid)
@@ -575,6 +588,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resolve_worker = None
         self.sequence_data = sequence_data
 
+        max_points = max(
+            (int(variant.get("meta", {}).get("pointCount", 0)) for variant in sequence_data.get("variants", [])),
+            default=0,
+        )
+        self.current_points_spin.blockSignals(True)
+        self.current_points_spin.setRange(0, max_points)
+        self.current_points_spin.setValue(max_points)
+        self.current_points_spin.blockSignals(False)
+
         self.variant_combo.blockSignals(True)
         self.variant_combo.clear()
         for index, variant in enumerate(sequence_data.get("variants", [])):
@@ -594,8 +616,12 @@ class MainWindow(QtWidgets.QMainWindow):
         data = self.variant_combo.currentData()
         return data if isinstance(data, dict) else None
 
+    def on_apply_strategy(self) -> None:
+        self.on_variant_changed()
+
     def on_variant_changed(self) -> None:
         variant = self.current_variant()
+        self.full_variant_data = variant
         self.variant_data = variant
         self.board_sequences = []
         self.current_region = None
@@ -610,6 +636,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.info_text.setPlainText("No variant loaded")
             return
 
+        current_points = int(self.current_points_spin.value())
+        self.variant_data = apply_progression_strategy(variant, current_points)
+
+        if not self.variant_data.get("boardSequences"):
+            meta = self.variant_data.get("meta", {})
+            self.info_text.setPlainText(
+                "\n".join(
+                    [
+                        f"Build: {self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
+                        f"Variant: {meta.get('variantName', '-')}",
+                        f"Strategy: legendary and glyph first, then rarity",
+                        f"Points: {meta.get('pointCount', 0)} / {meta.get('availablePointCount', current_points)} / {meta.get('fullPointCount', 0)}",
+                        "No nodes planned for the current point count.",
+                    ]
+                )
+            )
+            return
+
         self.board_sequences = [
             BoardSequence(
                 board_key=item["boardKey"],
@@ -619,7 +663,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 entry_nodes=item.get("entryNodes", []),
                 steps=item.get("steps", []),
             )
-            for item in variant.get("boardSequences", [])
+            for item in self.variant_data.get("boardSequences", [])
         ]
 
         self.board_combo.blockSignals(True)
@@ -654,6 +698,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     f"Build: {self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
                     f"Character: {meta.get('char', '-')}",
                     f"Variant: {meta.get('variantName', '-')}",
+                    f"Strategy: legendary and glyph first, then rarity",
+                    f"Points: {meta.get('pointCount', 0)} / {meta.get('availablePointCount', 0)} / {meta.get('fullPointCount', meta.get('pointCount', 0))}",
                     f"Board: {board.board_name}",
                     f"Key: {board.board_key}",
                     f"Index: {board.board_index}",
