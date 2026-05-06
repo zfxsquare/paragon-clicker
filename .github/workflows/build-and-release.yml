@@ -26,6 +26,12 @@ jobs:
       - name: Install project dependencies
         run: uv sync
 
+      - name: Install UPX
+        shell: pwsh
+        run: |
+          choco install upx -y
+          upx --version
+
       - name: Build single-file executable
         run: >-
           uv run --with pyinstaller pyinstaller
@@ -35,10 +41,36 @@ jobs:
           --windowed
           --name paragon-clicker
           --paths src
-          --collect-all PySide6
-          --collect-all pyautogui
-          --collect-all pyscreeze
+          --hidden-import pyautogui._pyautogui_win
+          --hidden-import pyscreeze
           --hidden-import mouseinfo
+          --hidden-import pygetwindow
+          --hidden-import pymsgbox
+          --hidden-import pytweening
+          --exclude-module PySide6.QtCharts
+          --exclude-module PySide6.QtDataVisualization
+          --exclude-module PySide6.QtMultimedia
+          --exclude-module PySide6.QtNetwork
+          --exclude-module PySide6.QtOpenGL
+          --exclude-module PySide6.QtPositioning
+          --exclude-module PySide6.QtQml
+          --exclude-module PySide6.QtQuick
+          --exclude-module PySide6.QtQuickControls2
+          --exclude-module PySide6.QtRemoteObjects
+          --exclude-module PySide6.QtScxml
+          --exclude-module PySide6.QtSensors
+          --exclude-module PySide6.QtSql
+          --exclude-module PySide6.QtStateMachine
+          --exclude-module PySide6.QtTest
+          --exclude-module PySide6.QtTextToSpeech
+          --exclude-module PySide6.QtWebChannel
+          --exclude-module PySide6.QtWebEngineCore
+          --exclude-module PySide6.QtWebEngineQuick
+          --exclude-module PySide6.QtWebEngineWidgets
+          --exclude-module PySide6.QtWebSockets
+          --exclude-module PySide6.QtXml
+          --exclude-module PySide6.QtXmlPatterns
+          --upx-dir C:\ProgramData\chocolatey\bin
           scripts/launch_paragon_clicker.py
 
       - name: Prepare release archive
