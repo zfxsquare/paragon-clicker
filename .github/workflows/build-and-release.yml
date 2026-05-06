@@ -41,12 +41,6 @@ jobs:
           --windowed
           --name paragon-clicker
           --paths src
-          --hidden-import pyautogui._pyautogui_win
-          --hidden-import pyscreeze
-          --hidden-import mouseinfo
-          --hidden-import pygetwindow
-          --hidden-import pymsgbox
-          --hidden-import pytweening
           --exclude-module PySide6.QtCharts
           --exclude-module PySide6.QtDataVisualization
           --exclude-module PySide6.QtMultimedia
@@ -70,6 +64,13 @@ jobs:
           --exclude-module PySide6.QtWebSockets
           --exclude-module PySide6.QtXml
           --exclude-module PySide6.QtXmlPatterns
+          --exclude-module pyautogui
+          --exclude-module pyscreeze
+          --exclude-module mouseinfo
+          --exclude-module pygetwindow
+          --exclude-module pymsgbox
+          --exclude-module pytweening
+          --exclude-module PIL
           --upx-dir C:\ProgramData\chocolatey\bin
           scripts/launch_paragon_clicker.py
 

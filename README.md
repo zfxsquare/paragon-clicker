@@ -88,7 +88,7 @@ uv run paragon-clicker
 - Before clicking, the app tries to activate the visible window owned by `Target Process`
 - Default target process is `Diablo IV.exe`
 - If no visible window for that process is found, clicking is aborted
-- `PyAutoGUI` fail-safe stays enabled: moving the mouse to the top-left corner of the primary screen should interrupt clicking
+- A built-in fail-safe stays enabled: moving the mouse to the top-left corner of the primary screen should interrupt clicking
 - For first-time testing, use a larger start delay such as `5s`
 - For first-time testing, use a larger click interval such as `0.2s`
 
@@ -128,4 +128,4 @@ uv sync
 - The selected rectangle is evenly split into a 21x21 logical grid.
 - Each click targets the center of its grid cell.
 - Click positions are computed from `rotatedCoord` so they match the board orientation already visible on screen.
-- `PyAutoGUI` fail-safe stays enabled. Moving the mouse to the top-left corner of the primary screen should abort further clicks.
+- A built-in fail-safe stays enabled. Moving the mouse to the top-left corner of the primary screen should abort further clicks.

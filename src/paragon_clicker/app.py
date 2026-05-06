@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import ctypes
+import ctypes.wintypes
 import sys
 import time
 from dataclasses import dataclass
 from typing import Any
 
-import pyautogui
 import psutil
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from paragon_clicker.d2core import GRID_SIZE, build_sequence_from_planner_input
 
 
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
 SW_RESTORE = 9
 
 
@@ -309,6 +311,30 @@ def activate_process_window(process_name: str) -> bool:
     return True
 
 
+def is_failsafe_triggered() -> bool:
+    if sys.platform != "win32":
+        return False
+
+    point = ctypes.wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+    return point.x <= 0 and point.y <= 0
+
+
+def move_mouse_and_click(x: int, y: int) -> None:
+    if sys.platform != "win32":
+        raise RuntimeError("Mouse automation is only supported on Windows")
+
+    user32 = ctypes.windll.user32
+    if not user32.SetCursorPos(int(x), int(y)):
+        raise RuntimeError(f"SetCursorPos failed for ({x}, {y})")
+
+    if is_failsafe_triggered():
+        raise RuntimeError("Fail-safe triggered")
+
+    user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+    user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+
+
 class ResolvePlannerWorker(QtCore.QThread):
     resolved = QtCore.Signal(dict)
     failed = QtCore.Signal(str)
@@ -349,7 +375,6 @@ class ClickWorker(QtCore.QThread):
         self._stop_requested = True
 
     def run(self) -> None:
-        pyautogui.FAILSAFE = True
         try:
             if self._start_delay > 0:
                 end_at = time.time() + self._start_delay
@@ -375,8 +400,10 @@ class ClickWorker(QtCore.QThread):
                 if self._stop_requested:
                     self.finished_with_status.emit(False, "Stopped by user")
                     return
-                pyautogui.moveTo(point.x, point.y)
-                pyautogui.click(point.x, point.y)
+                if is_failsafe_triggered():
+                    self.finished_with_status.emit(False, "Fail-safe triggered")
+                    return
+                move_mouse_and_click(point.x, point.y)
                 self.progress.emit(
                     index,
                     len(self._points),
@@ -386,8 +413,6 @@ class ClickWorker(QtCore.QThread):
                     time.sleep(self._click_interval)
 
             self.finished_with_status.emit(True, "Click sequence completed")
-        except pyautogui.FailSafeException:
-            self.finished_with_status.emit(False, "PyAutoGUI fail-safe triggered")
         except Exception as error:  # pragma: no cover
             self.finished_with_status.emit(False, f"Clicking failed: {error}")
 
@@ -845,7 +870,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 def main() -> int:
-    pyautogui.PAUSE = 0
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("Paragon Clicker")
     window = MainWindow()
