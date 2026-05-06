@@ -49,8 +49,8 @@ uv run paragon-clicker
 4. Confirm `Target Process` is `Diablo IV.exe`
 5. Choose one board from the dropdown
 6. Click `Select Region`
-7. Drag from the board rectangle's top-left corner to the bottom-right corner
-8. Preview generated click points
+7. Drag from the board rectangle's top-left corner to the bottom-right corner while watching the live `21 x 21` overlay preview
+8. Click `Preview Grid Clicks` to show the on-screen `21 x 21` overlay and click points
 9. Set delay / interval
 10. Start clicking
 
@@ -61,6 +61,15 @@ uv run paragon-clicker
 - End at the board rectangle bottom-right corner
 - The tool divides that rectangle evenly into `21 x 21`
 - Each click is performed at the center of the matched grid cell
+- During dragging, the selection overlay already shows the live grid and target click points to help alignment
+
+## Grid Overlay Preview
+
+- `Preview Grid Clicks` hides the main window and shows a full-screen overlay
+- Cyan lines show the `21 x 21` grid
+- Gold dots show the click centers that will be used
+- `Start` and `End` markers highlight the first and last click
+- Click anywhere or press `Esc` to close the overlay and return to the app
 
 ## Safety Notes
 

@@ -47,7 +47,7 @@ class SelectionOverlay(QtWidgets.QWidget):
     selection_made = QtCore.Signal(QtCore.QRect)
     selection_cancelled = QtCore.Signal()
 
-    def __init__(self) -> None:
+    def __init__(self, preview_cells: list[tuple[int, int]] | None = None) -> None:
         super().__init__()
         self.setWindowTitle("Select Board Region")
         self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
@@ -59,6 +59,7 @@ class SelectionOverlay(QtWidgets.QWidget):
 
         self._start: QtCore.QPoint | None = None
         self._end: QtCore.QPoint | None = None
+        self._preview_cells = preview_cells or []
 
         screen_rect = QtGui.QGuiApplication.primaryScreen().virtualGeometry()
         self.setGeometry(screen_rect)
@@ -101,8 +102,12 @@ class SelectionOverlay(QtWidgets.QWidget):
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QtGui.QColor(5, 8, 16, 90))
-        instruction = "Drag from the board rectangle top-left corner to bottom-right corner. The app will split it into 21x21 cells and click each cell center. Press Esc to cancel."
+        instruction = (
+            "Drag from the board rectangle top-left corner to bottom-right corner. "
+            "Grid lines and click points are previewed live while selecting. Press Esc to cancel."
+        )
         painter.setPen(QtGui.QPen(QtGui.QColor(245, 247, 255), 1))
         painter.setFont(QtGui.QFont("Segoe UI", 12))
         painter.drawText(24, 36, instruction)
@@ -121,6 +126,144 @@ class SelectionOverlay(QtWidgets.QWidget):
         painter.setPen(QtGui.QPen(QtGui.QColor(122, 162, 255), 2))
         painter.setBrush(QtGui.QColor(122, 162, 255, 40))
         painter.drawRect(rect)
+
+        width = rect.right() - rect.left()
+        height = rect.bottom() - rect.top()
+        if width <= 0 or height <= 0:
+            return
+
+        cell_width = width / GRID_SIZE
+        cell_height = height / GRID_SIZE
+
+        grid_pen = QtGui.QPen(QtGui.QColor(97, 232, 255, 130), 1)
+        painter.setPen(grid_pen)
+        for index in range(1, GRID_SIZE):
+            x = rect.left() + index * cell_width
+            painter.drawLine(
+                QtCore.QPointF(x, rect.top()),
+                QtCore.QPointF(x, rect.bottom()),
+            )
+            y = rect.top() + index * cell_height
+            painter.drawLine(
+                QtCore.QPointF(rect.left(), y),
+                QtCore.QPointF(rect.right(), y),
+            )
+
+        if self._preview_cells:
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 208, 92), 1.5))
+            painter.setBrush(QtGui.QColor(255, 208, 92, 235))
+            for row, col in self._preview_cells:
+                x = rect.left() + (col + 0.5) * cell_width
+                y = rect.top() + (row + 0.5) * cell_height
+                painter.drawEllipse(QtCore.QPointF(x, y), 3.5, 3.5)
+
+            first_row, first_col = self._preview_cells[0]
+            last_row, last_col = self._preview_cells[-1]
+            first = QtCore.QPointF(
+                rect.left() + (first_col + 0.5) * cell_width,
+                rect.top() + (first_row + 0.5) * cell_height,
+            )
+            last = QtCore.QPointF(
+                rect.left() + (last_col + 0.5) * cell_width,
+                rect.top() + (last_row + 0.5) * cell_height,
+            )
+            painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
+            painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
+            painter.drawText(first.toPoint() + QtCore.QPoint(8, -8), "Start")
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 143, 143), 1))
+            painter.drawText(last.toPoint() + QtCore.QPoint(8, -8), "End")
+
+
+class GridPreviewOverlay(QtWidgets.QWidget):
+    dismissed = QtCore.Signal()
+
+    def __init__(self, region: QtCore.QRect, points: list[ClickPoint]) -> None:
+        super().__init__()
+        self._region = region.normalized()
+        self._points = points
+        self.setWindowTitle("Grid Preview")
+        self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowType.Tool, True)
+        self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+        screen_rect = QtGui.QGuiApplication.primaryScreen().virtualGeometry()
+        self.setGeometry(screen_rect)
+
+    def show_and_focus(self) -> None:
+        self.showFullScreen()
+        self.raise_()
+        self.activateWindow()
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if event.key() == QtCore.Qt.Key.Key_Escape:
+            self.close()
+            self.dismissed.emit()
+            return
+        super().keyPressEvent(event)
+
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        if event.button() == QtCore.Qt.MouseButton.LeftButton:
+            self.close()
+            self.dismissed.emit()
+            return
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.fillRect(self.rect(), QtGui.QColor(5, 8, 16, 68))
+
+        instruction = (
+            "21x21 grid preview. Cyan lines show cell boundaries, gold dots show click centers. "
+            "Click anywhere or press Esc to close."
+        )
+        painter.setPen(QtGui.QPen(QtGui.QColor(245, 247, 255), 1))
+        painter.setFont(QtGui.QFont("Segoe UI", 12))
+        painter.drawText(24, 36, instruction)
+
+        local_region = QtCore.QRect(
+            self.mapFromGlobal(self._region.topLeft()),
+            self.mapFromGlobal(self._region.bottomRight()),
+        ).normalized()
+
+        painter.setBrush(QtGui.QColor(58, 79, 123, 28))
+        painter.setPen(QtGui.QPen(QtGui.QColor(122, 162, 255), 2))
+        painter.drawRect(local_region)
+        painter.fillRect(local_region, QtGui.QColor(122, 162, 255, 18))
+
+        cell_width = local_region.width() / GRID_SIZE
+        cell_height = local_region.height() / GRID_SIZE
+
+        grid_pen = QtGui.QPen(QtGui.QColor(97, 232, 255, 110), 1)
+        painter.setPen(grid_pen)
+        for index in range(1, GRID_SIZE):
+            x = local_region.left() + index * cell_width
+            painter.drawLine(
+                QtCore.QPointF(x, local_region.top()),
+                QtCore.QPointF(x, local_region.bottom()),
+            )
+            y = local_region.top() + index * cell_height
+            painter.drawLine(
+                QtCore.QPointF(local_region.left(), y),
+                QtCore.QPointF(local_region.right(), y),
+            )
+
+        painter.setPen(QtGui.QPen(QtGui.QColor(255, 208, 92), 1.5))
+        painter.setBrush(QtGui.QColor(255, 208, 92, 230))
+        for point in self._points:
+            center = self.mapFromGlobal(QtCore.QPoint(point.x, point.y))
+            painter.drawEllipse(QtCore.QPointF(center), 3.5, 3.5)
+
+        if self._points:
+            first = self.mapFromGlobal(QtCore.QPoint(self._points[0].x, self._points[0].y))
+            last = self.mapFromGlobal(QtCore.QPoint(self._points[-1].x, self._points[-1].y))
+            painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
+            painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
+            painter.drawText(first + QtCore.QPoint(8, -8), "Start")
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 143, 143), 1))
+            painter.drawText(last + QtCore.QPoint(8, -8), "End")
 
 
 def activate_process_window(process_name: str) -> bool:
@@ -261,9 +404,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_region: QtCore.QRect | None = None
         self.current_points: list[ClickPoint] = []
         self.overlay: SelectionOverlay | None = None
+        self.preview_overlay: GridPreviewOverlay | None = None
         self.resolve_worker: ResolvePlannerWorker | None = None
         self.click_worker: ClickWorker | None = None
         self._region_selection_active = False
+        self._grid_preview_active = False
 
         self._build_ui()
 
@@ -372,7 +517,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.variant_combo.currentIndexChanged.connect(self.on_variant_changed)
         self.board_combo.currentIndexChanged.connect(self.on_board_changed)
         self.select_region_button.clicked.connect(self.on_select_region)
-        self.preview_button.clicked.connect(self.refresh_preview)
+        self.preview_button.clicked.connect(self.on_preview_grid)
         self.start_button.clicked.connect(self.on_start_clicking)
         self.stop_button.clicked.connect(self.on_stop_clicking)
 
@@ -505,10 +650,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log(f"Selecting region for {board.board_key}")
         self._region_selection_active = True
         self.hide()
-        QtCore.QTimer.singleShot(150, self._show_region_overlay)
+        QtCore.QTimer.singleShot(150, lambda: self._show_region_overlay(board))
 
-    def _show_region_overlay(self) -> None:
-        self.overlay = SelectionOverlay()
+    def _show_region_overlay(self, board: BoardSequence) -> None:
+        preview_cells = [
+            (int(step["rotatedCoord"]["row"]), int(step["rotatedCoord"]["col"]))
+            for step in board.steps
+        ]
+        self.overlay = SelectionOverlay(preview_cells=preview_cells)
         self.overlay.selection_made.connect(self.on_region_selected)
         self.overlay.selection_cancelled.connect(self.on_region_cancelled)
         self.overlay.show_and_focus()
@@ -516,6 +665,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _restore_after_region_selection(self) -> None:
         self._region_selection_active = False
         self.overlay = None
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _restore_after_grid_preview(self) -> None:
+        self._grid_preview_active = False
+        self.preview_overlay = None
         self.show()
         self.raise_()
         self.activateWindow()
@@ -566,6 +722,41 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
             )
         return points
+
+    def on_preview_grid(self) -> None:
+        board = self.current_board()
+        if board is None:
+            QtWidgets.QMessageBox.information(self, "No Board", "Select a board first.")
+            return
+        if self.current_region is None:
+            QtWidgets.QMessageBox.information(
+                self, "No Region", "Select the board region first."
+            )
+            return
+
+        self.refresh_preview()
+        if not self.current_points:
+            QtWidgets.QMessageBox.warning(
+                self, "No Points", "No click points were generated."
+            )
+            return
+
+        self.log(f"Showing grid preview for {board.board_key}")
+        self._grid_preview_active = True
+        self.hide()
+        QtCore.QTimer.singleShot(150, self._show_grid_preview_overlay)
+
+    def _show_grid_preview_overlay(self) -> None:
+        if self.current_region is None or not self.current_points:
+            self._restore_after_grid_preview()
+            return
+        self.preview_overlay = GridPreviewOverlay(self.current_region, self.current_points)
+        self.preview_overlay.dismissed.connect(self.on_grid_preview_closed)
+        self.preview_overlay.show_and_focus()
+
+    def on_grid_preview_closed(self) -> None:
+        self.log("Grid preview closed")
+        self._restore_after_grid_preview()
 
     def refresh_preview(self) -> None:
         board = self.current_board()
