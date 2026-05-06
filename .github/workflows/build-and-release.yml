@@ -1,0 +1,75 @@
+name: Build And Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install project dependencies
+        run: uv sync
+
+      - name: Build single-file executable
+        run: >-
+          uv run --with pyinstaller pyinstaller
+          --noconfirm
+          --clean
+          --onefile
+          --windowed
+          --name paragon-clicker
+          --paths src
+          --collect-all PySide6
+          --collect-all pyautogui
+          --collect-all pyscreeze
+          --hidden-import mouseinfo
+          scripts/launch_paragon_clicker.py
+
+      - name: Prepare release archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist/paragon-clicker.exe release/paragon-clicker.exe
+          Copy-Item README.md release/README.md
+          Compress-Archive -Path release/* -DestinationPath dist/paragon-clicker-windows-x64.zip -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paragon-clicker-windows-x64
+          path: dist/paragon-clicker-windows-x64.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: paragon-clicker-windows-x64
+          path: dist
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/paragon-clicker-windows-x64.zip

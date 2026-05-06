@@ -31,6 +31,13 @@ uv sync
 uv run paragon-clicker
 ```
 
+## Download Prebuilt EXE
+
+- Prebuilt Windows single-file builds are published in GitHub Releases
+- Download the latest `paragon-clicker-windows-x64.zip`
+- Extract it and run `paragon-clicker.exe`
+- Python is not required when using the release build
+
 ## What The App Does
 
 - Parses a D2Core planner URL and extracts the `bd` build id
@@ -40,6 +47,11 @@ uv run paragon-clicker
 - Lets you select the board rectangle on screen
 - Splits the board rectangle into a `21 x 21` grid
 - Clicks the center of each target cell in sequence
+
+## CI And Release
+
+- GitHub Actions builds a Windows single-file executable on every push to `main`
+- Pushing a tag like `v0.1.0` also creates a GitHub Release and uploads the built zip artifact
 
 ## Workflow
 
