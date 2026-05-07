@@ -8,6 +8,41 @@ from dataclasses import dataclass
 from typing import Any
 
 import psutil
+
+
+SM_XVIRTUALSCREEN = 76
+SM_YVIRTUALSCREEN = 77
+SM_CXVIRTUALSCREEN = 78
+SM_CYVIRTUALSCREEN = 79
+
+
+def configure_dpi_awareness() -> None:
+    if sys.platform != "win32":
+        return
+
+    try:
+        user32 = ctypes.windll.user32
+        user32.SetProcessDpiAwarenessContext.restype = ctypes.c_bool
+        user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+        if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+configure_dpi_awareness()
+
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from paragon_clicker.d2core import (
@@ -48,6 +83,38 @@ class BoardSequence:
         return f"{self.board_index}: {self.board_name} ({self.board_key})"
 
 
+def get_virtual_screen_geometry() -> QtCore.QRect:
+    if sys.platform == "win32":
+        user32 = ctypes.windll.user32
+        left = int(user32.GetSystemMetrics(SM_XVIRTUALSCREEN))
+        top = int(user32.GetSystemMetrics(SM_YVIRTUALSCREEN))
+        width = int(user32.GetSystemMetrics(SM_CXVIRTUALSCREEN))
+        height = int(user32.GetSystemMetrics(SM_CYVIRTUALSCREEN))
+        return QtCore.QRect(left, top, width, height)
+
+    return QtGui.QGuiApplication.primaryScreen().virtualGeometry()
+
+
+def get_cursor_pos() -> QtCore.QPoint:
+    if sys.platform == "win32":
+        point = ctypes.wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+        return QtCore.QPoint(int(point.x), int(point.y))
+
+    return QtGui.QCursor.pos()
+
+
+def global_point_to_local(widget: QtWidgets.QWidget, point: QtCore.QPoint) -> QtCore.QPoint:
+    geometry = widget.geometry()
+    return QtCore.QPoint(point.x() - geometry.x(), point.y() - geometry.y())
+
+
+def global_rect_to_local(widget: QtWidgets.QWidget, rect: QtCore.QRect) -> QtCore.QRect:
+    top_left = global_point_to_local(widget, rect.topLeft())
+    bottom_right = global_point_to_local(widget, rect.bottomRight())
+    return QtCore.QRect(top_left, bottom_right).normalized()
+
+
 class SelectionOverlay(QtWidgets.QWidget):
     selection_made = QtCore.Signal(QtCore.QRect)
     selection_cancelled = QtCore.Signal()
@@ -66,7 +133,7 @@ class SelectionOverlay(QtWidgets.QWidget):
         self._end: QtCore.QPoint | None = None
         self._preview_cells = preview_cells or []
 
-        screen_rect = QtGui.QGuiApplication.primaryScreen().virtualGeometry()
+        screen_rect = get_virtual_screen_geometry()
         self.setGeometry(screen_rect)
 
     def show_and_focus(self) -> None:
@@ -77,20 +144,20 @@ class SelectionOverlay(QtWidgets.QWidget):
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
-        self._start = event.globalPosition().toPoint()
+        self._start = get_cursor_pos()
         self._end = self._start
         self.update()
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         if self._start is None:
             return
-        self._end = event.globalPosition().toPoint()
+        self._end = get_cursor_pos()
         self.update()
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.button() != QtCore.Qt.MouseButton.LeftButton or self._start is None:
             return
-        self._end = event.globalPosition().toPoint()
+        self._end = get_cursor_pos()
         rect = QtCore.QRect(self._start, self._end).normalized()
         self.close()
         if rect.width() < 5 or rect.height() < 5:
@@ -120,9 +187,7 @@ class SelectionOverlay(QtWidgets.QWidget):
         if self._start is None or self._end is None:
             return
 
-        rect = QtCore.QRect(
-            self.mapFromGlobal(self._start), self.mapFromGlobal(self._end)
-        ).normalized()
+        rect = global_rect_to_local(self, QtCore.QRect(self._start, self._end).normalized())
         painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_Clear)
         painter.fillRect(rect, QtCore.Qt.GlobalColor.transparent)
         painter.setCompositionMode(
@@ -193,7 +258,7 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
-        screen_rect = QtGui.QGuiApplication.primaryScreen().virtualGeometry()
+        screen_rect = get_virtual_screen_geometry()
         self.setGeometry(screen_rect)
 
     def show_and_focus(self) -> None:
@@ -228,10 +293,7 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         painter.setFont(QtGui.QFont("Segoe UI", 12))
         painter.drawText(24, 36, instruction)
 
-        local_region = QtCore.QRect(
-            self.mapFromGlobal(self._region.topLeft()),
-            self.mapFromGlobal(self._region.bottomRight()),
-        ).normalized()
+        local_region = global_rect_to_local(self, self._region)
 
         painter.setBrush(QtGui.QColor(58, 79, 123, 28))
         painter.setPen(QtGui.QPen(QtGui.QColor(122, 162, 255), 2))
@@ -258,12 +320,12 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         painter.setPen(QtGui.QPen(QtGui.QColor(255, 208, 92), 1.5))
         painter.setBrush(QtGui.QColor(255, 208, 92, 230))
         for point in self._points:
-            center = self.mapFromGlobal(QtCore.QPoint(point.x, point.y))
+            center = global_point_to_local(self, QtCore.QPoint(point.x, point.y))
             painter.drawEllipse(QtCore.QPointF(center), 3.5, 3.5)
 
         if self._points:
-            first = self.mapFromGlobal(QtCore.QPoint(self._points[0].x, self._points[0].y))
-            last = self.mapFromGlobal(QtCore.QPoint(self._points[-1].x, self._points[-1].y))
+            first = global_point_to_local(self, QtCore.QPoint(self._points[0].x, self._points[0].y))
+            last = global_point_to_local(self, QtCore.QPoint(self._points[-1].x, self._points[-1].y))
             painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
             painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
             painter.drawText(first + QtCore.QPoint(8, -8), "Start")

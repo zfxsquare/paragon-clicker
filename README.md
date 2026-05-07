@@ -99,6 +99,7 @@ uv run paragon-clicker
 - Default target process is `Diablo IV.exe`
 - If no visible window for that process is found, clicking is aborted
 - A built-in fail-safe stays enabled: moving the mouse to the top-left corner of the primary screen should interrupt clicking
+- Selection, preview, and actual clicks are all based on physical screen coordinates to reduce DPI-related offset issues across different Windows machines
 - For first-time testing, use a larger start delay such as `5s`
 - For first-time testing, use a larger click interval such as `0.2s`
 
