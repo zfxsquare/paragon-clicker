@@ -84,29 +84,67 @@ class BoardSequence:
 
 
 def get_virtual_screen_geometry() -> QtCore.QRect:
-    if sys.platform == "win32":
-        user32 = ctypes.windll.user32
-        left = int(user32.GetSystemMetrics(SM_XVIRTUALSCREEN))
-        top = int(user32.GetSystemMetrics(SM_YVIRTUALSCREEN))
-        width = int(user32.GetSystemMetrics(SM_CXVIRTUALSCREEN))
-        height = int(user32.GetSystemMetrics(SM_CYVIRTUALSCREEN))
-        return QtCore.QRect(left, top, width, height)
-
     return QtGui.QGuiApplication.primaryScreen().virtualGeometry()
 
 
 def get_cursor_pos() -> QtCore.QPoint:
-    if sys.platform == "win32":
-        point = ctypes.wintypes.POINT()
-        ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
-        return QtCore.QPoint(int(point.x), int(point.y))
-
     return QtGui.QCursor.pos()
 
 
 def global_point_to_local(widget: QtWidgets.QWidget, point: QtCore.QPoint) -> QtCore.QPoint:
     geometry = widget.geometry()
     return QtCore.QPoint(point.x() - geometry.x(), point.y() - geometry.y())
+
+
+def get_screen_physical_geometry(screen: QtGui.QScreen) -> QtCore.QRect:
+    geometry = screen.geometry()
+    dpr = screen.devicePixelRatio() or 1.0
+    return QtCore.QRect(
+        int(round(geometry.x() * dpr)),
+        int(round(geometry.y() * dpr)),
+        int(round(geometry.width() * dpr)),
+        int(round(geometry.height() * dpr)),
+    )
+
+
+def physical_point_to_qt_global(point: QtCore.QPoint) -> QtCore.QPoint:
+    screens = QtGui.QGuiApplication.screens()
+    for screen in screens:
+        physical = get_screen_physical_geometry(screen)
+        if physical.contains(point):
+            logical = screen.geometry()
+            dpr = screen.devicePixelRatio() or 1.0
+            x = (point.x() - physical.x()) / dpr + logical.x()
+            y = (point.y() - physical.y()) / dpr + logical.y()
+            return QtCore.QPoint(int(round(x)), int(round(y)))
+
+    primary = QtGui.QGuiApplication.primaryScreen()
+    if primary is not None:
+        physical = get_screen_physical_geometry(primary)
+        logical = primary.geometry()
+        dpr = primary.devicePixelRatio() or 1.0
+        x = (point.x() - physical.x()) / dpr + logical.x()
+        y = (point.y() - physical.y()) / dpr + logical.y()
+        return QtCore.QPoint(int(round(x)), int(round(y)))
+
+    return point
+
+
+def physical_rect_to_local(widget: QtWidgets.QWidget, rect: QtCore.QRect) -> QtCore.QRect:
+    top_left = physical_point_to_qt_global(rect.topLeft())
+    bottom_right = physical_point_to_qt_global(rect.bottomRight())
+    global_rect = QtCore.QRect(top_left, bottom_right).normalized()
+    geometry = widget.geometry()
+    return QtCore.QRect(
+        global_rect.x() - geometry.x(),
+        global_rect.y() - geometry.y(),
+        global_rect.width(),
+        global_rect.height(),
+    )
+
+
+def physical_point_to_local(widget: QtWidgets.QWidget, point: QtCore.QPoint) -> QtCore.QPoint:
+    return global_point_to_local(widget, physical_point_to_qt_global(point))
 
 
 def global_rect_to_local(widget: QtWidgets.QWidget, rect: QtCore.QRect) -> QtCore.QRect:
@@ -144,20 +182,20 @@ class SelectionOverlay(QtWidgets.QWidget):
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
-        self._start = get_cursor_pos()
+        self._start = event.globalPosition().toPoint()
         self._end = self._start
         self.update()
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         if self._start is None:
             return
-        self._end = get_cursor_pos()
+        self._end = event.globalPosition().toPoint()
         self.update()
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.button() != QtCore.Qt.MouseButton.LeftButton or self._start is None:
             return
-        self._end = get_cursor_pos()
+        self._end = event.globalPosition().toPoint()
         rect = QtCore.QRect(self._start, self._end).normalized()
         self.close()
         if rect.width() < 5 or rect.height() < 5:
@@ -187,7 +225,9 @@ class SelectionOverlay(QtWidgets.QWidget):
         if self._start is None or self._end is None:
             return
 
-        rect = global_rect_to_local(self, QtCore.QRect(self._start, self._end).normalized())
+        rect = QtCore.QRect(
+            self.mapFromGlobal(self._start), self.mapFromGlobal(self._end)
+        ).normalized()
         painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_Clear)
         painter.fillRect(rect, QtCore.Qt.GlobalColor.transparent)
         painter.setCompositionMode(
@@ -293,7 +333,10 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         painter.setFont(QtGui.QFont("Segoe UI", 12))
         painter.drawText(24, 36, instruction)
 
-        local_region = global_rect_to_local(self, self._region)
+        local_region = QtCore.QRect(
+            self.mapFromGlobal(self._region.topLeft()),
+            self.mapFromGlobal(self._region.bottomRight()),
+        ).normalized()
 
         painter.setBrush(QtGui.QColor(58, 79, 123, 28))
         painter.setPen(QtGui.QPen(QtGui.QColor(122, 162, 255), 2))
@@ -320,12 +363,12 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         painter.setPen(QtGui.QPen(QtGui.QColor(255, 208, 92), 1.5))
         painter.setBrush(QtGui.QColor(255, 208, 92, 230))
         for point in self._points:
-            center = global_point_to_local(self, QtCore.QPoint(point.x, point.y))
+            center = self.mapFromGlobal(QtCore.QPoint(point.x, point.y))
             painter.drawEllipse(QtCore.QPointF(center), 3.5, 3.5)
 
         if self._points:
-            first = global_point_to_local(self, QtCore.QPoint(self._points[0].x, self._points[0].y))
-            last = global_point_to_local(self, QtCore.QPoint(self._points[-1].x, self._points[-1].y))
+            first = self.mapFromGlobal(QtCore.QPoint(self._points[0].x, self._points[0].y))
+            last = self.mapFromGlobal(QtCore.QPoint(self._points[-1].x, self._points[-1].y))
             painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
             painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
             painter.drawText(first + QtCore.QPoint(8, -8), "Start")
@@ -377,25 +420,21 @@ def activate_process_window(process_name: str) -> bool:
 
 
 def is_failsafe_triggered() -> bool:
-    if sys.platform != "win32":
-        return False
-
-    point = ctypes.wintypes.POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
-    return point.x <= 0 and point.y <= 0
+    point = QtGui.QCursor.pos()
+    primary = QtGui.QGuiApplication.primaryScreen()
+    if primary is None:
+        return point.x() <= 0 and point.y() <= 0
+    top_left = primary.geometry().topLeft()
+    return point.x() <= top_left.x() and point.y() <= top_left.y()
 
 
 def move_mouse_and_click(x: int, y: int) -> None:
-    if sys.platform != "win32":
-        raise RuntimeError("Mouse automation is only supported on Windows")
-
-    user32 = ctypes.windll.user32
-    if not user32.SetCursorPos(int(x), int(y)):
-        raise RuntimeError(f"SetCursorPos failed for ({x}, {y})")
+    QtGui.QCursor.setPos(int(x), int(y))
 
     if is_failsafe_triggered():
         raise RuntimeError("Fail-safe triggered")
 
+    user32 = ctypes.windll.user32
     user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
