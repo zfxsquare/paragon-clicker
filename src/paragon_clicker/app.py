@@ -19,7 +19,6 @@ from paragon_clicker.d2core import (
 
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
-SW_RESTORE = 9
 
 
 @dataclass(slots=True)
@@ -287,6 +286,8 @@ def activate_process_window(process_name: str) -> bool:
     def callback(hwnd: int, lparam: int) -> bool:
         if not user32.IsWindowVisible(hwnd):
             return True
+        if user32.IsIconic(hwnd):
+            return True
         if user32.GetWindowTextLengthW(hwnd) <= 0:
             return True
 
@@ -307,8 +308,6 @@ def activate_process_window(process_name: str) -> bool:
         return False
 
     hwnd = matching_windows[0]
-    user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.BringWindowToTop(hwnd)
     user32.SetForegroundWindow(hwnd)
     user32.SetActiveWindow(hwnd)
     time.sleep(0.2)

@@ -95,6 +95,7 @@ uv run paragon-clicker
 ## Safety Notes
 
 - Before clicking, the app tries to activate the visible window owned by `Target Process`
+- Window activation now only moves focus to an already visible, non-minimized target window and does not restore or reposition it
 - Default target process is `Diablo IV.exe`
 - If no visible window for that process is found, clicking is aborted
 - A built-in fail-safe stays enabled: moving the mouse to the top-left corner of the primary screen should interrupt clicking
