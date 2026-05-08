@@ -341,7 +341,12 @@ def build_variant_boards(
                 }
             )
 
-        selected_nodes.sort(key=lambda item: item.get("pointOrder", 10**9))
+        selected_nodes.sort(
+            key=lambda item: (
+                item.get("pointOrder") is None,
+                item.get("pointOrder") if item.get("pointOrder") is not None else 10**9,
+            )
+        )
         boards.append(
             {
                 "boardKey": board_key,
