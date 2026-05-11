@@ -159,7 +159,7 @@ class SelectionOverlay(QtWidgets.QWidget):
 
     def __init__(self, preview_cells: list[tuple[int, int]] | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("Select Board Region")
+        self.setWindowTitle("选择板块区域")
         self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
         self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
         self.setWindowFlag(QtCore.Qt.WindowType.Tool, True)
@@ -215,8 +215,7 @@ class SelectionOverlay(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QtGui.QColor(5, 8, 16, 90))
         instruction = (
-            "Drag from the board rectangle top-left corner to bottom-right corner. "
-            "Grid lines and click points are previewed live while selecting. Press Esc to cancel."
+            "从板块矩形左上角拖到右下角。选区时会实时预览网格和点击点。按 Esc 取消。"
         )
         painter.setPen(QtGui.QPen(QtGui.QColor(245, 247, 255), 1))
         painter.setFont(QtGui.QFont("Segoe UI", 12))
@@ -279,9 +278,9 @@ class SelectionOverlay(QtWidgets.QWidget):
             )
             painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
             painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
-            painter.drawText(first.toPoint() + QtCore.QPoint(8, -8), "Start")
+            painter.drawText(first.toPoint() + QtCore.QPoint(8, -8), "起点")
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 143, 143), 1))
-            painter.drawText(last.toPoint() + QtCore.QPoint(8, -8), "End")
+            painter.drawText(last.toPoint() + QtCore.QPoint(8, -8), "终点")
 
 
 class GridPreviewOverlay(QtWidgets.QWidget):
@@ -291,7 +290,7 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         super().__init__()
         self._region = region.normalized()
         self._points = points
-        self.setWindowTitle("Grid Preview")
+        self.setWindowTitle("网格预览")
         self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
         self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
         self.setWindowFlag(QtCore.Qt.WindowType.Tool, True)
@@ -326,8 +325,7 @@ class GridPreviewOverlay(QtWidgets.QWidget):
         painter.fillRect(self.rect(), QtGui.QColor(5, 8, 16, 68))
 
         instruction = (
-            "21x21 grid preview. Cyan lines show cell boundaries, gold dots show click centers. "
-            "Click anywhere or press Esc to close."
+            "21x21 网格预览。青色线表示格子边界，金色点表示点击中心。单击任意位置或按 Esc 关闭。"
         )
         painter.setPen(QtGui.QPen(QtGui.QColor(245, 247, 255), 1))
         painter.setFont(QtGui.QFont("Segoe UI", 12))
@@ -371,9 +369,9 @@ class GridPreviewOverlay(QtWidgets.QWidget):
             last = self.mapFromGlobal(QtCore.QPoint(self._points[-1].x, self._points[-1].y))
             painter.setFont(QtGui.QFont("Segoe UI", 10, QtGui.QFont.Weight.Bold))
             painter.setPen(QtGui.QPen(QtGui.QColor(135, 255, 162), 1))
-            painter.drawText(first + QtCore.QPoint(8, -8), "Start")
+            painter.drawText(first + QtCore.QPoint(8, -8), "起点")
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 143, 143), 1))
-            painter.drawText(last + QtCore.QPoint(8, -8), "End")
+            painter.drawText(last + QtCore.QPoint(8, -8), "终点")
 
 
 def activate_process_window(process_name: str) -> bool:
@@ -432,7 +430,7 @@ def move_mouse_and_click(x: int, y: int) -> None:
     QtGui.QCursor.setPos(int(x), int(y))
 
     if is_failsafe_triggered():
-        raise RuntimeError("Fail-safe triggered")
+        raise RuntimeError("已触发安全停止")
 
     user32 = ctypes.windll.user32
     user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
@@ -450,7 +448,7 @@ class ResolvePlannerWorker(QtCore.QThread):
 
     def run(self) -> None:
         try:
-            self.status.emit("Parsing planner URL and fetching build data...")
+            self.status.emit("正在解析规划器链接并获取构筑数据……")
             sequence = build_sequence_from_planner_input(self._planner_input)
             self.resolved.emit(sequence)
         except Exception as error:
@@ -484,28 +482,28 @@ class ClickWorker(QtCore.QThread):
                 end_at = time.time() + self._start_delay
                 while time.time() < end_at:
                     if self._stop_requested:
-                        self.finished_with_status.emit(False, "Stopped before clicking")
+                        self.finished_with_status.emit(False, "点击前已停止")
                         return
                     time.sleep(0.05)
 
             self.progress.emit(
                 0,
                 len(self._points),
-                f"Activating process window: {self._target_process_name}",
+                f"正在激活进程窗口：{self._target_process_name}",
             )
             if not activate_process_window(self._target_process_name):
                 self.finished_with_status.emit(
                     False,
-                    f"Could not find a visible window for process {self._target_process_name}",
+                    f"未找到进程 {self._target_process_name} 的可见窗口",
                 )
                 return
 
             for index, point in enumerate(self._points, start=1):
                 if self._stop_requested:
-                    self.finished_with_status.emit(False, "Stopped by user")
+                    self.finished_with_status.emit(False, "用户已停止")
                     return
                 if is_failsafe_triggered():
-                    self.finished_with_status.emit(False, "Fail-safe triggered")
+                    self.finished_with_status.emit(False, "已触发安全停止")
                     return
                 move_mouse_and_click(point.x, point.y)
                 self.progress.emit(
@@ -516,15 +514,15 @@ class ClickWorker(QtCore.QThread):
                 if index < len(self._points) and self._click_interval > 0:
                     time.sleep(self._click_interval)
 
-            self.finished_with_status.emit(True, "Click sequence completed")
+            self.finished_with_status.emit(True, "点击序列已完成")
         except Exception as error:  # pragma: no cover
-            self.finished_with_status.emit(False, f"Clicking failed: {error}")
+            self.finished_with_status.emit(False, f"点击失败：{error}")
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Paragon Clicker")
+        self.setWindowTitle("巅峰加点器")
         self.resize(1120, 760)
 
         self.sequence_data: dict[str, Any] | None = None
@@ -549,35 +547,35 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
 
-        source_group = QtWidgets.QGroupBox("D2Core Planner URL")
+        source_group = QtWidgets.QGroupBox("D2Core 规划器链接")
         source_layout = QtWidgets.QGridLayout(source_group)
         self.url_edit = QtWidgets.QLineEdit("https://www.d2core.com/d4/planner?bd=1Tok")
-        self.parse_button = QtWidgets.QPushButton("Parse URL")
+        self.parse_button = QtWidgets.QPushButton("解析链接")
         self.variant_combo = QtWidgets.QComboBox()
         self.process_edit = QtWidgets.QLineEdit("Diablo IV.exe")
         self.current_points_spin = QtWidgets.QSpinBox()
         self.current_points_spin.setRange(0, 400)
         self.current_points_spin.setValue(0)
-        self.apply_strategy_button = QtWidgets.QPushButton("Apply Strategy")
-        source_layout.addWidget(QtWidgets.QLabel("Planner URL"), 0, 0)
+        self.apply_strategy_button = QtWidgets.QPushButton("应用策略")
+        source_layout.addWidget(QtWidgets.QLabel("规划器链接"), 0, 0)
         source_layout.addWidget(self.url_edit, 0, 1)
         source_layout.addWidget(self.parse_button, 0, 2)
-        source_layout.addWidget(QtWidgets.QLabel("Variant"), 1, 0)
+        source_layout.addWidget(QtWidgets.QLabel("变体"), 1, 0)
         source_layout.addWidget(self.variant_combo, 1, 1, 1, 2)
-        source_layout.addWidget(QtWidgets.QLabel("Target Process"), 2, 0)
+        source_layout.addWidget(QtWidgets.QLabel("目标进程"), 2, 0)
         source_layout.addWidget(self.process_edit, 2, 1, 1, 2)
-        source_layout.addWidget(QtWidgets.QLabel("Current Points"), 3, 0)
+        source_layout.addWidget(QtWidgets.QLabel("当前巅峰点"), 3, 0)
         source_layout.addWidget(self.current_points_spin, 3, 1)
         source_layout.addWidget(self.apply_strategy_button, 3, 2)
         root.addWidget(source_group)
 
-        options_group = QtWidgets.QGroupBox("Board Setup")
+        options_group = QtWidgets.QGroupBox("板块设置")
         options_layout = QtWidgets.QGridLayout(options_group)
         self.board_combo = QtWidgets.QComboBox()
-        self.select_region_button = QtWidgets.QPushButton("Select Region")
-        self.preview_button = QtWidgets.QPushButton("Preview Grid Clicks")
-        self.start_button = QtWidgets.QPushButton("Start Clicking")
-        self.stop_button = QtWidgets.QPushButton("Stop")
+        self.select_region_button = QtWidgets.QPushButton("选择区域")
+        self.preview_button = QtWidgets.QPushButton("预览网格")
+        self.start_button = QtWidgets.QPushButton("开始点击")
+        self.stop_button = QtWidgets.QPushButton("停止")
         self.stop_button.setEnabled(False)
         self.delay_spin = QtWidgets.QDoubleSpinBox()
         self.delay_spin.setRange(0.0, 30.0)
@@ -589,14 +587,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.interval_spin.setSingleStep(0.05)
         self.interval_spin.setValue(0.12)
         self.interval_spin.setSuffix(" s")
-        self.region_label = QtWidgets.QLabel("No region selected")
+        self.region_label = QtWidgets.QLabel("未选择区域")
         self.region_label.setWordWrap(True)
 
-        options_layout.addWidget(QtWidgets.QLabel("Board"), 0, 0)
+        options_layout.addWidget(QtWidgets.QLabel("板块"), 0, 0)
         options_layout.addWidget(self.board_combo, 0, 1, 1, 3)
-        options_layout.addWidget(QtWidgets.QLabel("Start Delay"), 1, 0)
+        options_layout.addWidget(QtWidgets.QLabel("开始延迟"), 1, 0)
         options_layout.addWidget(self.delay_spin, 1, 1)
-        options_layout.addWidget(QtWidgets.QLabel("Click Interval"), 1, 2)
+        options_layout.addWidget(QtWidgets.QLabel("点击间隔"), 1, 2)
         options_layout.addWidget(self.interval_spin, 1, 3)
         options_layout.addWidget(self.select_region_button, 2, 0)
         options_layout.addWidget(self.preview_button, 2, 1)
@@ -621,7 +619,7 @@ class MainWindow(QtWidgets.QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
         self.table = QtWidgets.QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
-            ["Step", "Local", "Node", "Kind", "Row", "Col", "Screen XY"]
+            ["步骤", "板内", "节点", "类型", "行", "列", "屏幕坐标"]
         )
         self.table.horizontalHeader().setSectionResizeMode(
             2, QtWidgets.QHeaderView.ResizeMode.Stretch
@@ -642,7 +640,7 @@ class MainWindow(QtWidgets.QMainWindow):
         splitter.addWidget(right_panel)
         splitter.setSizes([320, 780])
 
-        log_group = QtWidgets.QGroupBox("Log")
+        log_group = QtWidgets.QGroupBox("日志")
         log_layout = QtWidgets.QVBoxLayout(log_group)
         self.log_text = QtWidgets.QPlainTextEdit()
         self.log_text.setReadOnly(True)
@@ -666,11 +664,11 @@ class MainWindow(QtWidgets.QMainWindow):
         planner_input = self.url_edit.text().strip()
         if not planner_input:
             QtWidgets.QMessageBox.information(
-                self, "No URL", "Enter a D2Core planner URL first."
+                self, "未输入链接", "请先输入 D2Core 规划器链接。"
             )
             return
         self.parse_button.setEnabled(False)
-        self.log(f"Parsing planner input: {planner_input}")
+        self.log(f"正在解析规划器链接：{planner_input}")
         self.resolve_worker = ResolvePlannerWorker(planner_input)
         self.resolve_worker.status.connect(self.log)
         self.resolve_worker.failed.connect(self.on_parse_failed)
@@ -680,8 +678,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_parse_failed(self, message: str) -> None:
         self.parse_button.setEnabled(True)
         self.resolve_worker = None
-        self.log(f"Parse failed: {message}")
-        QtWidgets.QMessageBox.critical(self, "Parse Failed", message)
+        self.log(f"解析失败：{message}")
+        QtWidgets.QMessageBox.critical(self, "解析失败", message)
 
     def on_parse_resolved(self, sequence_data: dict[str, Any]) -> None:
         self.parse_button.setEnabled(True)
@@ -700,17 +698,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.variant_combo.blockSignals(True)
         self.variant_combo.clear()
         for index, variant in enumerate(sequence_data.get("variants", [])):
-            label = variant.get("meta", {}).get("variantName") or f"Variant {index}"
+            label = variant.get("meta", {}).get("variantName") or f"变体 {index}"
             self.variant_combo.addItem(f"{index}: {label}", variant)
         self.variant_combo.blockSignals(False)
 
         self.current_region = None
-        self.region_label.setText("No region selected")
+        self.region_label.setText("未选择区域")
         self.current_points = []
         self.table.setRowCount(0)
         self.on_variant_changed()
-        title = sequence_data.get("meta", {}).get("title") or "Unknown"
-        self.log(f"Planner parsed successfully: {title}")
+        title = sequence_data.get("meta", {}).get("title") or "未知"
+        self.log(f"规划器解析成功：{title}")
 
     def current_variant(self) -> dict[str, Any] | None:
         data = self.variant_combo.currentData()
@@ -725,7 +723,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.variant_data = variant
         self.board_sequences = []
         self.current_region = None
-        self.region_label.setText("No region selected")
+        self.region_label.setText("未选择区域")
         self.current_points = []
         self.table.setRowCount(0)
         self.board_combo.blockSignals(True)
@@ -733,7 +731,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.board_combo.blockSignals(False)
 
         if variant is None:
-            self.info_text.setPlainText("No variant loaded")
+            self.info_text.setPlainText("未加载变体")
             return
 
         current_points = int(self.current_points_spin.value())
@@ -744,11 +742,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.info_text.setPlainText(
                 "\n".join(
                     [
-                        f"Build: {self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
-                        f"Variant: {meta.get('variantName', '-')}",
-                        f"Strategy: legendary and glyph first, then rarity",
-                        f"Points: {meta.get('pointCount', 0)} / {meta.get('availablePointCount', current_points)} / {meta.get('fullPointCount', 0)}",
-                        "No nodes planned for the current point count.",
+                        f"构筑：{self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
+                        f"变体：{meta.get('variantName', '-')}",
+                        f"策略：先传奇和雕文，再稀有度",
+                        f"点数：{meta.get('pointCount', 0)} / {meta.get('availablePointCount', current_points)} / {meta.get('fullPointCount', 0)}",
+                        "当前点数下没有可规划的节点。",
                     ]
                 )
             )
@@ -779,7 +777,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_board_changed(self) -> None:
         board = self.current_board()
         if board is None:
-            self.info_text.setPlainText("No board selected")
+            self.info_text.setPlainText("未选择板块")
             self.current_points = []
             self.table.setRowCount(0)
             return
@@ -795,17 +793,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.info_text.setPlainText(
             "\n".join(
                 [
-                    f"Build: {self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
-                    f"Character: {meta.get('char', '-')}",
-                    f"Variant: {meta.get('variantName', '-')}",
-                    f"Strategy: legendary and glyph first, then rarity",
-                    f"Points: {meta.get('pointCount', 0)} / {meta.get('availablePointCount', 0)} / {meta.get('fullPointCount', meta.get('pointCount', 0))}",
-                    f"Board: {board.board_name}",
-                    f"Key: {board.board_key}",
-                    f"Index: {board.board_index}",
-                    f"Rotate: {board.board_rotate}",
-                    f"Clicks: {len(board.steps)}",
-                    f"Entry: {entry_desc}",
+                    f"构筑：{self.sequence_data.get('meta', {}).get('title', '-') if self.sequence_data else '-'}",
+                    f"职业：{meta.get('char', '-')}",
+                    f"变体：{meta.get('variantName', '-')}",
+                    f"策略：先传奇和雕文，再稀有度",
+                    f"点数：{meta.get('pointCount', 0)} / {meta.get('availablePointCount', 0)} / {meta.get('fullPointCount', meta.get('pointCount', 0))}",
+                    f"板块：{board.board_name}",
+                    f"键：{board.board_key}",
+                    f"序号：{board.board_index}",
+                    f"旋转：{board.board_rotate}",
+                    f"点击数：{len(board.steps)}",
+                    f"入口：{entry_desc}",
                 ]
             )
         )
@@ -815,10 +813,10 @@ class MainWindow(QtWidgets.QMainWindow):
         board = self.current_board()
         if board is None:
             QtWidgets.QMessageBox.information(
-                self, "No Board", "Parse a URL and select a board first."
+                self, "未选择板块", "请先解析链接并选择一个板块。"
             )
             return
-        self.log(f"Selecting region for {board.board_key}")
+        self.log(f"正在为板块 {board.board_key} 选择区域")
         self._region_selection_active = True
         self.hide()
         QtCore.QTimer.singleShot(150, lambda: self._show_region_overlay(board))
@@ -850,14 +848,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_region_selected(self, rect: QtCore.QRect) -> None:
         self.current_region = rect.normalized()
         self.region_label.setText(
-            f"Region: left={self.current_region.left()} top={self.current_region.top()} right={self.current_region.right()} bottom={self.current_region.bottom()}"
+            f"区域：left={self.current_region.left()} top={self.current_region.top()} right={self.current_region.right()} bottom={self.current_region.bottom()}"
         )
-        self.log("Region selected")
+        self.log("区域已选择")
         self._restore_after_region_selection()
         self.refresh_preview()
 
     def on_region_cancelled(self) -> None:
-        self.log("Region selection cancelled")
+        self.log("已取消区域选择")
         self._restore_after_region_selection()
 
     def build_click_points(
@@ -897,22 +895,20 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_preview_grid(self) -> None:
         board = self.current_board()
         if board is None:
-            QtWidgets.QMessageBox.information(self, "No Board", "Select a board first.")
+            QtWidgets.QMessageBox.information(self, "未选择板块", "请先选择一个板块。")
             return
         if self.current_region is None:
             QtWidgets.QMessageBox.information(
-                self, "No Region", "Select the board region first."
+                self, "未选择区域", "请先选择板块区域。"
             )
             return
 
         self.refresh_preview()
         if not self.current_points:
-            QtWidgets.QMessageBox.warning(
-                self, "No Points", "No click points were generated."
-            )
+            QtWidgets.QMessageBox.warning(self, "无点击点", "未生成任何点击点。")
             return
 
-        self.log(f"Showing grid preview for {board.board_key}")
+        self.log(f"正在显示板块 {board.board_key} 的网格预览")
         self._grid_preview_active = True
         self.hide()
         QtCore.QTimer.singleShot(150, self._show_grid_preview_overlay)
@@ -926,7 +922,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.preview_overlay.show_and_focus()
 
     def on_grid_preview_closed(self) -> None:
-        self.log("Grid preview closed")
+        self.log("网格预览已关闭")
         self._restore_after_grid_preview()
 
     def refresh_preview(self) -> None:
@@ -958,24 +954,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_start_clicking(self) -> None:
         board = self.current_board()
         if board is None:
-            QtWidgets.QMessageBox.information(self, "No Board", "Select a board first.")
+            QtWidgets.QMessageBox.information(self, "未选择板块", "请先选择一个板块。")
             return
         if self.current_region is None:
             QtWidgets.QMessageBox.information(
-                self, "No Region", "Select the board region first."
+                self, "未选择区域", "请先选择板块区域。"
             )
             return
         self.refresh_preview()
         if not self.current_points:
-            QtWidgets.QMessageBox.warning(
-                self, "No Points", "No click points were generated."
-            )
+            QtWidgets.QMessageBox.warning(self, "无点击点", "未生成任何点击点。")
             return
 
         target_process_name = self.process_edit.text().strip()
         if not target_process_name:
             QtWidgets.QMessageBox.information(
-                self, "No Process", "Enter the target process name first."
+                self, "未输入进程名", "请先输入目标进程名。"
             )
             return
 
@@ -993,13 +987,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.select_region_button.setEnabled(False)
         self.parse_button.setEnabled(False)
         self.log(
-            f"Starting click sequence for {board.board_key} with {len(self.current_points)} clicks after activating {target_process_name}"
+            f"开始为板块 {board.board_key} 点击，共 {len(self.current_points)} 次，先激活 {target_process_name}"
         )
 
     def on_stop_clicking(self) -> None:
         if self.click_worker is not None:
             self.click_worker.request_stop()
-            self.log("Stop requested")
+            self.log("已请求停止")
 
     def on_worker_progress(self, index: int, total: int, message: str) -> None:
         self.log(f"[{index}/{total}] {message}")
@@ -1012,12 +1006,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.click_worker = None
         self.log(message)
         if not success:
-            QtWidgets.QMessageBox.warning(self, "Clicking Stopped", message)
+            QtWidgets.QMessageBox.warning(self, "点击已停止", message)
 
 
 def main() -> int:
     app = QtWidgets.QApplication(sys.argv)
-    app.setApplicationName("Paragon Clicker")
+    app.setApplicationName("巅峰加点器")
     window = MainWindow()
     window.show()
     return app.exec()
